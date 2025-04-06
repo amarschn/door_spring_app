@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Trap Door Gas Spring Calculator</title>
-  <!-- Load Chart.js from CDN -->
+  <!-- Load Chart.js from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -24,7 +24,7 @@
       font-size: 1.75rem;
     }
     main {
-      max-width: 900px;
+      max-width: 1000px;
       margin: 1rem auto;
       background: #fff;
       border-radius: 5px;
@@ -70,14 +70,40 @@
       background: #f0f0f0;
       display: block;
       margin: 0 auto;
+      width: 600px;
+      height: 450px;
     }
     .results p {
       margin: 0.3rem 0;
     }
-    .chart-container {
+    .charts-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2rem;
+      justify-content: space-around;
+    }
+    .chart-box {
+      flex: 1 1 450px;
+      min-width: 300px;
+      max-width: 500px;
+    }
+    .chart-box canvas {
       width: 100%;
       height: 400px;
-      margin: 0 auto;
+    }
+
+    /* Optional styling for the <details> section */
+    details {
+      margin: 1rem 0;
+      padding: 0.5rem;
+      background: #f8f9fa;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    details summary {
+      cursor: pointer;
+      font-weight: bold;
+      outline: none;
     }
   </style>
 </head>
@@ -100,15 +126,28 @@
 
     <label for="doorMountFrac">Door Mount Fraction:</label>
     <input type="number" id="doorMountFrac" value="0.7" step="0.01">
-    <small>(0 = at hinge, 1 = free edge)</small><br>
+    <small>(0 = hinge, 1 = free edge)</small><br>
 
     <label for="cabMountX">Cab Mount X (m):</label>
-    <input type="number" id="cabMountX" value="0.4" step="0.01">
-    <small>(horizontal distance from hinge)</small><br>
+    <input type="number" id="cabMountX" value="0.4" step="0.01"><br>
 
     <label for="cabMountY">Cab Mount Y (m):</label>
-    <input type="number" id="cabMountY" value="0.1" step="0.01">
-    <small>(vertical distance from hinge)</small><br>
+    <input type="number" id="cabMountY" value="0.1" step="0.01"><br>
+
+    <label for="numSprings">Number of Springs:</label>
+    <input type="number" id="numSprings" value="1" step="1" min="1"><br>
+
+    <label for="springNominal">Spring Nominal Force (N):</label>
+    <input type="number" id="springNominal" value="200" step="10">
+    <small>(e.g. 100, 200, 300...)</small><br>
+
+    <label for="springVariation">Spring Variation ±(%):</label>
+    <input type="number" id="springVariation" value="10" step="1">
+    <small>(e.g. 10 means ±10% of nominal)</small><br>
+
+    <label for="handleFrac">Handle Fraction (0..1):</label>
+    <input type="number" id="handleFrac" value="0.9" step="0.01">
+    <small>(where 0=hinge, 1=free edge)</small><br>
 
     <button onclick="computeEverything()">Compute & Update</button>
   </div>
@@ -116,271 +155,527 @@
   <div class="section">
     <h2>2) Visualization</h2>
     <p>
-      This canvas shows a side view of the door rotating about the hinge (black circle at origin).
-      The door extends to the right at 0°, up to your chosen open angle at the final position. 
-      The gas spring is drawn between its two mount points.
+      Shows the door in down (<strong>solid</strong>) and up (<strong>semi-transparent</strong>) positions.
+      Gravity is indicated by a downward arrow. The hinge is black, the handle is green, 
+      and the spring is blue. The drawing auto-scales and centers to fit large or small doors.
     </p>
-    <canvas id="visualCanvas" width="500" height="400"></canvas>
+    <canvas id="visualCanvas" width="600" height="450"></canvas>
   </div>
 
   <div class="section">
     <h2>3) Results</h2>
     <div class="results">
+      <p id="springLengthsText"></p>
       <p id="strokeText"></p>
       <p id="forceText"></p>
+      <p id="handleForceText"></p>
     </div>
-    <div class="chart-container">
-      <canvas id="forceChart"></canvas>
+
+    <div class="charts-container">
+      <div class="chart-box">
+        <h4>Total Spring Force vs. Angle</h4>
+        <canvas id="springForceChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>Handle Force vs. Angle</h4>
+        <canvas id="handleForceChart"></canvas>
+      </div>
     </div>
+  </div>
+
+  <div class="section">
+    <h2>4) Additional Info</h2>
+    <details>
+      <summary>Show Example Calculations</summary>
+      <p>
+        This calculator handles trap-door-style panels that rotate from horizontal 
+        (<em>down</em>) at <code>0&deg;</code> to a user-specified <code>openAngle</code>.
+        Key steps:
+      </p>
+      <ol>
+        <li><strong>Door Torque:</strong> 
+          <code>\( \tau_{door}(\theta) = W \times \frac{L}{2} \cos(\theta)\)</code>,
+          assuming uniform mass distribution.
+        </li>
+        <li><strong>Spring Length:</strong> 
+          We find the distance between the <em>door mount</em> (on the door at <code>doorMountFrac</code>)
+          and the <em>cabinet mount</em> (<code>cabMountX, cabMountY</code>) 
+          using basic geometry for each angle.
+        </li>
+        <li><strong>Min/Max Length & Stroke:</strong> 
+          We track the <em>shortest</em> and <em>longest</em> spring length from 
+          <code>0&deg;</code> to <code>openAngle</code>. The difference is the <em>stroke</em>. 
+        </li>
+        <li><strong>Spring Force Variation:</strong> 
+          Each spring is assumed to vary <code>±springVariation%</code> from its nominal. 
+          This is modeled linearly between <code>minLen</code> (fully compressed) and 
+          <code>maxLen</code> (fully extended).
+        </li>
+        <li><strong>Number of Springs:</strong> 
+          The total spring force is 
+          <code>SpringForceSingle &times; numSprings</code>.
+        </li>
+        <li><strong>Handle Force:</strong> 
+          The net torque (<code>doorTorque - springTorque</code>) 
+          is divided by the door radius at the handle, 
+          <code>handleFrac &times; L</code>.
+        </li>
+      </ol>
+      <p>
+        Real gas springs can have more complex, non-linear force curves, 
+        friction, or breakaway force. This tool is for approximate sizing & 
+        conceptual understanding.
+      </p>
+    </details>
   </div>
 </main>
 
 <footer>
-  <p>&copy; 2025 - Trap Door Calculator</p>
+  <p>&copy; 2025 - Trap Door Calculator with Auto-Scaling View</p>
 </footer>
 
 <script>
-  // GLOBALS
-  let forceChart = null;
+  // Chart instances
+  let springForceChart = null;
+  let handleForceChart = null;
 
-  // 1) Door Torque for Uniform Door
+  ///////////////////////////////////////////////////////////////////////////
+  // 1) Basic Door & Spring Calculations
+  ///////////////////////////////////////////////////////////////////////////
+
   function doorTorque(massDoor, lengthDoor, thetaDeg) {
-    // Weight
     const g = 9.81;
     const W = massDoor * g;
     const thetaRad = thetaDeg * Math.PI / 180;
     // Torque = W * (L/2) * cos(theta)
-    return W * (lengthDoor / 2) * Math.cos(thetaRad);
+    return W * (lengthDoor/2) * Math.cos(thetaRad);
   }
 
-  // 2) Compute lever arm from hinge to spring line of action:
-  //    For a quick approach, let's do:
-  //      - The door mount is at fraction doorMountFrac of lengthDoor from the hinge
-  //      - We'll approximate that the angle between spring force and door radius is ~ 30° 
-  //        or so. You can refine if you want the direct perpendicular distance. 
-  //
-  //    Alternatively, we can do a purely geometric approach: 
-  //    Force torque = F_spring * (perp distance from hinge).
-  //    We'll define a function that returns that needed force for equilibrium.
-  function requiredSpringForce(massDoor, lengthDoor, thetaDeg, doorMountFrac, angleSpringDeg=30) {
-    // Door torque
-    const tauDoor = doorTorque(massDoor, lengthDoor, thetaDeg);
-    // We'll assume the door mount radius:
-    const rDoor = lengthDoor * doorMountFrac;
-    // Approx angle between spring force and the door radius
-    const alphaRad = angleSpringDeg * Math.PI / 180;
-    // perp lever arm
-    const leverArm = rDoor * Math.sin(alphaRad);
-
-    if (Math.abs(leverArm) < 1e-9) return Infinity;
-    return tauDoor / leverArm;
-  }
-
-  // 3) We also want the spring's actual length (distance) between:
-  //    - The door mount point (which rotates with the door)
-  //    - The cabinet mount point (fixed)
-  //    This is used to find the stroke from closed (theta=0) to open (theta=openAngle).
   function springLength(lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY) {
-    // Hinge is (0,0)
-    // Door mount (for fraction f) is at (f*L*cos(theta), f*L*sin(theta))
-    // Cabinet mount is (cabMountX, cabMountY)
     const thetaRad = thetaDeg * Math.PI / 180;
-
     const doorMountX = doorMountFrac * lengthDoor * Math.cos(thetaRad);
     const doorMountY = doorMountFrac * lengthDoor * Math.sin(thetaRad);
-
     const dx = doorMountX - cabMountX;
     const dy = doorMountY - cabMountY;
     return Math.sqrt(dx*dx + dy*dy);
   }
 
-  // 4) We'll loop from theta=0..openAngle (in steps) 
-  //    and get both: the required force and the spring length.
-  function computeDataAcrossAngles(massDoor, lengthDoor, doorMountFrac, cabMountX, cabMountY, openAngleDeg) {
-    const angleStep = 5; // step in degrees
+  // We'll gather minLen & maxLen over 0..openAngle
+  function computeSpringLengthsOverRange(lengthDoor, doorMountFrac, cabMountX, cabMountY, openAngle) {
+    const angleStep = 3; 
     let angles = [];
-    let forces = [];
     let lengths = [];
-
-    for (let theta=0; theta<=openAngleDeg; theta+=angleStep) {
+    
+    for (let theta=0; theta<=openAngle; theta+=angleStep) {
       angles.push(theta);
-
-      // Force
-      const F = requiredSpringForce(massDoor, lengthDoor, theta, doorMountFrac);
-      forces.push(F);
-
-      // Spring length
-      const Ls = springLength(lengthDoor, theta, doorMountFrac, cabMountX, cabMountY);
-      lengths.push(Ls);
     }
+    if (!angles.includes(openAngle)) angles.push(openAngle);
 
-    return { angles, forces, lengths };
-  }
+    angles.sort((a,b)=>a-b);
 
-  // 5) The stroke is max(lengths) - min(lengths)
-  function findStroke(lengths) {
+    angles.forEach(a => {
+      lengths.push(springLength(lengthDoor, a, doorMountFrac, cabMountX, cabMountY));
+    });
+
     const minLen = Math.min(...lengths);
     const maxLen = Math.max(...lengths);
-    return maxLen - minLen;
+    return { angles, lengths, minLen, maxLen };
   }
 
-  // 6) We'll also draw a simple 2D diagram on the canvas for a chosen angle.
-  //    - Hinge at (0,0)
-  //    - Door from (0,0) to (L cos theta, L sin theta)
-  //    - Cabinet mount at (cabMountX, cabMountY)
-  //    - Door mount at fraction doorMountFrac along the door
-  function drawDiagram(ctx, width, height, lengthDoor, angleDeg, doorMountFrac, cabMountX, cabMountY) {
-    ctx.clearRect(0,0,width,height);
-
-    // We'll define a coordinate transform so hinge is near bottom-left.
-    // Let's place hinge at (50, height-50).
-    // We scale up door dimensions by a factor for a nicer view (px per meter).
-    const pxPerM = 200; // adjust if needed
-    const hingeX = 50;
-    const hingeY = height - 50;
-
-    // Convert door geometry to screen coords
-    const thetaRad = angleDeg * Math.PI / 180;
-
-    const doorEndX = hingeX + (lengthDoor * Math.cos(thetaRad) * pxPerM);
-    const doorEndY = hingeY - (lengthDoor * Math.sin(thetaRad) * pxPerM);
-
-    // Door mount
-    const doorMountX = hingeX + (doorMountFrac*lengthDoor*Math.cos(thetaRad)*pxPerM);
-    const doorMountY = hingeY - (doorMountFrac*lengthDoor*Math.sin(thetaRad)*pxPerM);
-
-    // Cabinet mount
-    const cabX = hingeX + (cabMountX * pxPerM);
-    const cabY = hingeY - (cabMountY * pxPerM);
-
-    // Draw hinge
-    ctx.fillStyle = "black";
-    ctx.beginPath();
-    ctx.arc(hingeX, hingeY, 5, 0, 2*Math.PI);
-    ctx.fill();
-
-    // Draw door (line)
-    ctx.strokeStyle = "#333";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(hingeX, hingeY);
-    ctx.lineTo(doorEndX, doorEndY);
-    ctx.stroke();
-
-    // Draw door mount point
-    ctx.fillStyle = "blue";
-    ctx.beginPath();
-    ctx.arc(doorMountX, doorMountY, 4, 0, 2*Math.PI);
-    ctx.fill();
-
-    // Draw cabinet mount point
-    ctx.fillStyle = "red";
-    ctx.beginPath();
-    ctx.arc(cabX, cabY, 4, 0, 2*Math.PI);
-    ctx.fill();
-
-    // Draw spring line
-    ctx.strokeStyle = "blue";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(doorMountX, doorMountY);
-    ctx.lineTo(cabX, cabY);
-    ctx.stroke();
-
-    // Dimension callouts (just a couple examples)
-    // e.g., door length
-    // We'll place text near midpoint of door
-    const midX = (hingeX + doorEndX)/2;
-    const midY = (hingeY + doorEndY)/2;
-    ctx.fillStyle = "black";
-    ctx.font = "14px Arial";
-    ctx.fillText(`Door (L = ${lengthDoor} m)`, midX+10, midY);
-
-    // e.g., show angle
-    ctx.beginPath();
-    ctx.arc(hingeX, hingeY, 40, -Math.PI, -thetaRad - Math.PI, true);
-    ctx.strokeStyle = "#666";
-    ctx.stroke();
-
-    // Label the angle
-    ctx.fillText(`${angleDeg.toFixed(1)}°`, hingeX + 5, hingeY - 45);
-
-    // Possibly label spring length, but that can get crowded quickly.
+  // Spring force range
+  function springForceRange(nominal, variationPercent) {
+    const frac = variationPercent/100;
+    const fMin = nominal*(1 - frac);
+    const fMax = nominal*(1 + frac);
+    return {fMin, fMax};
   }
 
-  // 7) Master function to do everything:
+  // Convert length to extension fraction
+  function extensionFraction(L, minLen, maxLen) {
+    if (maxLen===minLen) return 0.5;
+    return (L - minLen)/(maxLen - minLen);
+  }
+
+  // Linear interpolation from fMin..fMax
+  function springForceAtExtension(fMin, fMax, fraction) {
+    if (fraction<0) fraction=0;
+    if (fraction>1) fraction=1;
+    return fMin + (fMax - fMin)*fraction;
+  }
+
+  // We compute data from 0..openAngle in steps of 1 deg
+  // (or smaller steps if you want more resolution).
+  function computeAllAngles(
+    massDoor, lengthDoor, openAngle, 
+    doorMountFrac, cabMountX, cabMountY,
+    numSprings, nominal, variationPercent,
+    handleFrac
+  ) {
+    // min/max lengths
+    const { minLen, maxLen } = computeSpringLengthsOverRange(lengthDoor, doorMountFrac, cabMountX, cabMountY, openAngle);
+    // Force range
+    const { fMin, fMax } = springForceRange(nominal, variationPercent);
+
+    let results = [];
+    for (let theta=0; theta<=openAngle; theta++) {
+      const dt = doorTorque(massDoor, lengthDoor, theta);
+      const Ls = springLength(lengthDoor, theta, doorMountFrac, cabMountX, cabMountY);
+      const frac = extensionFraction(Ls, minLen, maxLen);
+      const Fs_one = springForceAtExtension(fMin, fMax, frac);
+      const Fs_total = Fs_one * numSprings;
+
+      // Approx spring torque. We'll keep a simplistic approach:
+      const angleSpringDeg = 30; // user can refine or do real geometry
+      const alphaRad = angleSpringDeg*Math.PI/180;
+      const leverArm = (doorMountFrac*lengthDoor)*Math.sin(alphaRad);
+      const T_spring = Fs_total * leverArm;
+
+      const T_net = dt - T_spring;
+
+      const handleRadius = handleFrac*lengthDoor;
+      let F_handle = Infinity;
+      if (Math.abs(handleRadius)>1e-9) {
+        F_handle = T_net / handleRadius;
+      }
+
+      results.push({
+        angle: theta,
+        doorTorque: dt,
+        springLength: Ls,
+        extensionFrac: frac,
+        springForceSingle: Fs_one,
+        springForceTotal: Fs_total,
+        springTorque: T_spring,
+        netTorque: T_net,
+        handleForce: F_handle
+      });
+    }
+    return results;
+  }
+
+  function computeStroke(results) {
+    let minL = Infinity, maxL = -Infinity;
+    results.forEach(r=>{
+      if(r.springLength<minL) minL=r.springLength;
+      if(r.springLength>maxL) maxL=r.springLength;
+    });
+    return { stroke: maxL - minL, minLen: minL, maxLen: maxL };
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 2) Auto-Scaling & Centering in Canvas
+  ///////////////////////////////////////////////////////////////////////////
+
+  function boundingBoxForAngle(
+    lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY, handleFrac
+  ) {
+    const thetaRad = thetaDeg*Math.PI/180;
+    // hinge at (0,0)
+    // doorEnd at (L cos θ, L sin θ)
+    const doorEndX = lengthDoor*Math.cos(thetaRad);
+    const doorEndY = lengthDoor*Math.sin(thetaRad);
+    // doorMount
+    const doorMountX = doorMountFrac*lengthDoor*Math.cos(thetaRad);
+    const doorMountY = doorMountFrac*lengthDoor*Math.sin(thetaRad);
+    // handle
+    const handleX = handleFrac*lengthDoor*Math.cos(thetaRad);
+    const handleY = handleFrac*lengthDoor*Math.sin(thetaRad);
+
+    let points = [
+      {x:0, y:0}, 
+      {x:doorEndX, y:doorEndY},
+      {x:doorMountX, y:doorMountY},
+      {x:cabMountX, y:cabMountY},
+      {x:handleX,   y:handleY}
+    ];
+
+    let minX = Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    points.forEach(pt=>{
+      if(pt.x<minX) minX=pt.x;
+      if(pt.x>maxX) maxX=pt.x;
+      if(pt.y<minY) minY=pt.y;
+      if(pt.y>maxY) maxY=pt.y;
+    });
+    return {minX, maxX, minY, maxY};
+  }
+
+  function combinedBoundingBox(
+    lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+  ) {
+    const bbDown = boundingBoxForAngle(lengthDoor, 0, doorMountFrac, cabMountX, cabMountY, handleFrac);
+    const bbUp   = boundingBoxForAngle(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac);
+
+    const minX = Math.min(bbDown.minX, bbUp.minX);
+    const maxX = Math.max(bbDown.maxX, bbUp.maxX);
+    const minY = Math.min(bbDown.minY, bbUp.minY);
+    const maxY = Math.max(bbDown.maxY, bbUp.maxY);
+
+    return {minX, maxX, minY, maxY};
+  }
+
+  function drawArrow(ctx, x1, y1, x2, y2, arrowSize=8) {
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+    const angle = Math.atan2(y2-y1, x2-x1);
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2 - arrowSize*Math.cos(angle - Math.PI/6), y2 - arrowSize*Math.sin(angle - Math.PI/6));
+    ctx.lineTo(x2 - arrowSize*Math.cos(angle + Math.PI/6), y2 - arrowSize*Math.sin(angle + Math.PI/6));
+    ctx.lineTo(x2,y2);
+    ctx.fill();
+  }
+
+  function drawDoorState(ctx, angleDeg, lengthDoor,
+    doorMountFrac, cabMountX, cabMountY, handleFrac,
+    scale, offsetX, offsetY,
+    colorDoor, colorSpring, colorHandle, alpha=1.0
+  ) {
+    ctx.save();
+    ctx.globalAlpha=alpha;
+
+    const thetaRad = angleDeg*Math.PI/180;
+    // hinge
+    const hinge = {x:0, y:0};
+    // door end
+    const doorEnd = {
+      x: lengthDoor*Math.cos(thetaRad),
+      y: lengthDoor*Math.sin(thetaRad)
+    };
+    // door mount
+    const doorMount = {
+      x: doorMountFrac*lengthDoor*Math.cos(thetaRad),
+      y: doorMountFrac*lengthDoor*Math.sin(thetaRad)
+    };
+    // handle
+    const handlePt = {
+      x: handleFrac*lengthDoor*Math.cos(thetaRad),
+      y: handleFrac*lengthDoor*Math.sin(thetaRad)
+    };
+    // cabinet
+    const cab = {x: cabMountX, y: cabMountY};
+
+    function tx(p){
+      return {
+        x: offsetX + p.x*scale,
+        y: offsetY - p.y*scale
+      };
+    }
+    const hingeC   = tx(hinge);
+    const doorEndC = tx(doorEnd);
+    const doorMountC = tx(doorMount);
+    const cabC     = tx(cab);
+    const handleC  = tx(handlePt);
+
+    // door line
+    ctx.strokeStyle=colorDoor;
+    ctx.lineWidth=4;
+    ctx.beginPath();
+    ctx.moveTo(hingeC.x, hingeC.y);
+    ctx.lineTo(doorEndC.x, doorEndC.y);
+    ctx.stroke();
+
+    // spring line
+    ctx.strokeStyle=colorSpring;
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(doorMountC.x, doorMountC.y);
+    ctx.lineTo(cabC.x, cabC.y);
+    ctx.stroke();
+
+    // door mount
+    ctx.fillStyle=colorSpring;
+    ctx.beginPath();
+    ctx.arc(doorMountC.x, doorMountC.y, 4, 0, 2*Math.PI);
+    ctx.fill();
+
+    // cabinet mount
+    ctx.beginPath();
+    ctx.arc(cabC.x, cabC.y, 4, 0, 2*Math.PI);
+    ctx.fill();
+
+    // handle
+    ctx.fillStyle=colorHandle;
+    ctx.beginPath();
+    ctx.arc(handleC.x, handleC.y, 5, 0, 2*Math.PI);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawDiagram(ctx, w, h,
+    lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+  ) {
+    ctx.clearRect(0,0,w,h);
+
+    const {minX, maxX, minY, maxY} = combinedBoundingBox(
+      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+    );
+
+    const bbWidth  = maxX - minX;
+    const bbHeight = maxY - minY;
+
+    const margin = 20;
+    let scaleX = (w - 2*margin) / bbWidth;
+    let scaleY = (h - 2*margin) / bbHeight;
+    let scale = Math.min(scaleX, scaleY);
+    if(!Number.isFinite(scale)) scale=50; 
+
+    const bbCenterX = (minX + maxX)/2;
+    const bbCenterY = (minY + maxY)/2;
+    const canvasCenterX = w/2;
+    const canvasCenterY = h/2;
+
+    const offsetX = canvasCenterX - bbCenterX*scale;
+    const offsetY = canvasCenterY + bbCenterY*scale;
+
+    // Gravity arrow
+    ctx.strokeStyle="#444";
+    ctx.fillStyle="#444";
+    ctx.lineWidth=2;
+    drawArrow(ctx, 50, 20, 50, 60, 8);
+    ctx.font="14px Arial";
+    ctx.fillText("Gravity", 55, 60);
+
+    // Door down
+    drawDoorState(ctx, 0, lengthDoor,
+      doorMountFrac, cabMountX, cabMountY, handleFrac,
+      scale, offsetX, offsetY,
+      "#444","blue","green",1.0
+    );
+
+    // Door up
+    drawDoorState(ctx, openAngle, lengthDoor,
+      doorMountFrac, cabMountX, cabMountY, handleFrac,
+      scale, offsetX, offsetY,
+      "#999","blue","green",0.5
+    );
+
+    // Angle arc near hinge
+    ctx.save();
+    ctx.strokeStyle="#666";
+    ctx.beginPath();
+    const hingeC = {x: offsetX, y: offsetY};
+    // arc from PI to PI+openAngle
+    ctx.arc(hingeC.x, hingeC.y, 40, Math.PI, Math.PI+(openAngle*Math.PI/180), false);
+    ctx.stroke();
+    ctx.fillStyle="#000";
+    ctx.font="14px Arial";
+    ctx.fillText(`${openAngle}°`, hingeC.x+45, hingeC.y+5);
+    ctx.restore();
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 3) Charts
+  ///////////////////////////////////////////////////////////////////////////
+
+  function updateCharts(springData, handleData, angles) {
+    const ctx1 = document.getElementById("springForceChart").getContext("2d");
+    if(springForceChart) springForceChart.destroy();
+    springForceChart = new Chart(ctx1, {
+      type:'line',
+      data:{
+        labels: angles,
+        datasets:[{
+          label:'Spring Force (N)',
+          data: springData
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{
+          x:{title:{display:true, text:'Door Angle (°)'}},
+          y:{title:{display:true, text:'Spring Force (N)'}}
+        }
+      }
+    });
+
+    const ctx2 = document.getElementById("handleForceChart").getContext("2d");
+    if(handleForceChart) handleForceChart.destroy();
+    handleForceChart = new Chart(ctx2, {
+      type:'line',
+      data:{
+        labels: angles,
+        datasets:[{
+          label:'Handle Force (N) (+ Up / - Down)',
+          data: handleData
+        }]
+      },
+      options:{
+        responsive:true,
+        scales:{
+          x:{title:{display:true, text:'Door Angle (°)'}},
+          y:{title:{display:true, text:'Handle Force (N)'}}
+        }
+      }
+    });
+  }
+
+  ///////////////////////////////////////////////////////////////////////////
+  // 4) Main compute function
+  ///////////////////////////////////////////////////////////////////////////
   function computeEverything() {
-    // 1) Grab input
     const massDoor   = parseFloat(document.getElementById("massDoor").value);
     const lengthDoor = parseFloat(document.getElementById("lengthDoor").value);
     const openAngle  = parseFloat(document.getElementById("openAngle").value);
     const doorMountFrac = parseFloat(document.getElementById("doorMountFrac").value);
     const cabMountX  = parseFloat(document.getElementById("cabMountX").value);
     const cabMountY  = parseFloat(document.getElementById("cabMountY").value);
+    const numSprings = parseFloat(document.getElementById("numSprings").value);
+    const springNominal = parseFloat(document.getElementById("springNominal").value);
+    const springVariation = parseFloat(document.getElementById("springVariation").value);
+    const handleFrac = parseFloat(document.getElementById("handleFrac").value);
 
-    // 2) Compute data across angles
-    const { angles, forces, lengths } = computeDataAcrossAngles(
-      massDoor, lengthDoor, doorMountFrac, cabMountX, cabMountY, openAngle
+    // compute results
+    const results = computeAllAngles(
+      massDoor, lengthDoor, openAngle,
+      doorMountFrac, cabMountX, cabMountY,
+      numSprings, springNominal, springVariation,
+      handleFrac
     );
 
-    // 3) Compute stroke
-    const stroke = findStroke(lengths);
-
-    // 4) Update text results
-    document.getElementById("strokeText").textContent = 
-      `Required Spring Stroke: ${stroke.toFixed(3)} m`;
-    const maxForce = Math.max(...forces);
-    document.getElementById("forceText").textContent = 
-      `Maximum Required Spring Force (0° to ${openAngle}°): ${maxForce.toFixed(2)} N`;
-
-    // 5) Update chart
-    updateForceChart(angles, forces);
-
-    // 6) Draw diagram at the final (open) angle
-    const canvas = document.getElementById("visualCanvas");
-    const ctx = canvas.getContext("2d");
-    drawDiagram(ctx, canvas.width, canvas.height, lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY);
-  }
-
-  // 8) Use Chart.js to plot angle vs. force
-  function updateForceChart(angles, forces) {
-    const ctx = document.getElementById("forceChart").getContext('2d');
-    if (forceChart) {
-      forceChart.destroy();
-    }
-    forceChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: angles,
-        datasets: [{
-          label: 'Required Spring Force (N)',
-          data: forces
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Door Angle (° from horizontal)'
-            }
-          },
-          y: {
-            title: {
-              display: true,
-              text: 'Spring Force (N)'
-            }
-          }
-        }
-      }
+    // min/max length + stroke
+    const { stroke, minLen, maxLen } = computeStroke(results);
+    // max spring force
+    let maxF=0;
+    let maxHF=0;
+    results.forEach(r=>{
+      if(r.springForceTotal>maxF) maxF=r.springForceTotal;
+      const absHF=Math.abs(r.handleForce);
+      if(absHF>maxHF) maxHF=absHF;
     });
+
+    // update text
+    const minLenStr = minLen.toFixed(3);
+    const maxLenStr = maxLen.toFixed(3);
+    document.getElementById("springLengthsText").textContent =
+      `Spring Lengths: min = ${minLenStr} m, max = ${maxLenStr} m`;
+    document.getElementById("strokeText").textContent=
+      `Required Spring Stroke (max-min): ${stroke.toFixed(3)} m`;
+    document.getElementById("forceText").textContent=
+      `Max Total Spring Force (over motion): ${maxF.toFixed(2)} N`;
+    document.getElementById("handleForceText").textContent=
+      `Max Handle Force (push/pull): ±${maxHF.toFixed(2)} N`;
+
+    // chart data
+    const angles = results.map(r=>r.angle);
+    const springData = results.map(r=>r.springForceTotal);
+    const handleData = results.map(r=>r.handleForce);
+    updateCharts(springData, handleData, angles);
+
+    // draw diagram
+    const canvas=document.getElementById("visualCanvas");
+    const ctx=canvas.getContext("2d");
+    drawDiagram(ctx, canvas.width, canvas.height,
+      lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
+    );
   }
 
-  // On page load, do an initial compute
-  window.onload = function() {
+  // On load
+  window.onload = function(){
     computeEverything();
-  }
+  };
 </script>
 </body>
 </html>
