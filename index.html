@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Trap Door Gas Spring Calculator</title>
+
   <!-- Load Chart.js from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Load Pyodide from a CDN -->
@@ -34,16 +35,22 @@
       padding: 1rem 2rem;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    .section {
-      margin-bottom: 2rem;
-    }
-    .section h2 {
-      font-size: 1.2rem;
-      margin-bottom: 0.5rem;
-      color: #495057;
+
+    /* details element styling for collapsible sections */
+    details {
+      margin-bottom: 1rem;
+      padding: 0.5rem 0;
       border-bottom: 1px solid #dee2e6;
-      padding-bottom: 0.25rem;
     }
+    details summary {
+      cursor: pointer;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #495057;
+      outline: none;
+      margin-bottom: 0.5rem;
+    }
+
     label {
       display: inline-block;
       width: 220px;
@@ -94,20 +101,6 @@
       width: 100%;
       height: 400px;
     }
-
-    /* Optional styling for the <details> section */
-    details {
-      margin: 1rem 0;
-      padding: 0.5rem;
-      background: #f8f9fa;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    details summary {
-      cursor: pointer;
-      font-weight: bold;
-      outline: none;
-    }
   </style>
 </head>
 <body>
@@ -116,8 +109,9 @@
 </header>
 
 <main>
-  <div class="section">
-    <h2>1) Input Parameters</h2>
+  <!-- 1) INPUT PARAMETERS -->
+  <details open>
+    <summary>1) Input Parameters</summary>
     <label for="massDoor">Door Mass (kg):</label>
     <input type="number" id="massDoor" value="15" step="0.1"><br>
 
@@ -153,20 +147,22 @@
     <small>(where 0=hinge, 1=free edge)</small><br>
 
     <button id="computeBtn">Compute & Update</button>
-  </div>
+  </details>
 
-  <div class="section">
-    <h2>2) Visualization</h2>
+  <!-- 2) VISUALIZATION -->
+  <details>
+    <summary>2) Visualization</summary>
     <p>
       Shows the door in down (<strong>solid</strong>) and up (<strong>semi-transparent</strong>) positions.
       Gravity is indicated by a downward arrow. The hinge is black, the handle is green, 
       and the spring is blue. The drawing auto-scales and centers to fit large or small doors.
     </p>
     <canvas id="visualCanvas" width="600" height="450"></canvas>
-  </div>
+  </details>
 
-  <div class="section">
-    <h2>3) Results</h2>
+  <!-- 3) RESULTS + CHARTS -->
+  <details>
+    <summary>3) Results</summary>
     <div class="results">
       <p id="springLengthsText"></p>
       <p id="strokeText"></p>
@@ -184,89 +180,82 @@
         <canvas id="handleForceChart"></canvas>
       </div>
     </div>
-  </div>
+  </details>
 
-  <div class="section">
-    <h2>4) Additional Info</h2>
-    <details>
-      <summary>Show Example Calculations</summary>
-      <p>
-        This calculator handles trap-door-style panels that rotate from horizontal 
-        (<em>down</em>) at <code>0&deg;</code> to a user-specified <code>openAngle</code>.
-        Key steps:
-      </p>
-      <ol>
-        <li><strong>Door Torque:</strong> 
-          <code>\( \tau_{door}(\theta) = W \times \frac{L}{2} \cos(\theta)\)</code>,
-          assuming uniform mass distribution.
-        </li>
-        <li><strong>Spring Length:</strong> 
-          We find the distance between the <em>door mount</em> (on the door at <code>doorMountFrac</code>)
-          and the <em>cabinet mount</em> (<code>cabMountX, cabMountY</code>) 
-          using basic geometry for each angle.
-        </li>
-        <li><strong>Min/Max Length & Stroke:</strong> 
-          We track the <em>shortest</em> and <em>longest</em> spring length from 
-          <code>0&deg;</code> to <code>openAngle</code>. The difference is the <em>stroke</em>. 
-        </li>
-        <li><strong>Spring Force Variation:</strong> 
-          Each spring is assumed to vary <code>±springVariation%</code> from its nominal. 
-          This is modeled linearly between <code>minLen</code> (fully compressed) and 
-          <code>maxLen</code> (fully extended).
-        </li>
-        <li><strong>Number of Springs:</strong> 
-          The total spring force is 
-          <code>SpringForceSingle &times; numSprings</code>.
-        </li>
-        <li><strong>Handle Force:</strong> 
-          The net torque (<code>doorTorque - springTorque</code>) 
-          is divided by the door radius at the handle, 
-          <code>handleFrac &times; L</code>.
-        </li>
-      </ol>
-      <p>
-        Real gas springs can have more complex, non-linear force curves, 
-        friction, or breakaway force. This tool is for approximate sizing & 
-        conceptual understanding.
-      </p>
-    </details>
-  </div>
+  <!-- 4) ADDITIONAL INFO -->
+  <details>
+    <summary>4) Additional Info</summary>
+    <p>
+      This calculator handles trap-door-style panels that rotate from horizontal 
+      (<em>down</em>) at <code>0&deg;</code> to a user-specified <code>openAngle</code>.
+      Key steps:
+    </p>
+    <ol>
+      <li><strong>Door Torque:</strong> 
+        <code>\( \tau_{door}(\theta) = W \times \frac{L}{2} \cos(\theta)\)</code>,
+        assuming uniform mass distribution.
+      </li>
+      <li><strong>Spring Length:</strong> 
+        We find the distance between the <em>door mount</em> (on the door at <code>doorMountFrac</code>)
+        and the <em>cabinet mount</em> (<code>cabMountX, cabMountY</code>) 
+        using basic geometry for each angle.
+      </li>
+      <li><strong>Min/Max Length & Stroke:</strong> 
+        We track the <em>shortest</em> and <em>longest</em> spring length from 
+        <code>0&deg;</code> to <code>openAngle</code>. The difference is the <em>stroke</em>. 
+      </li>
+      <li><strong>Spring Force Variation:</strong> 
+        Each spring is assumed to vary <code>±springVariation%</code> from its nominal. 
+        This is modeled linearly between <code>minLen</code> (fully compressed) and 
+        <code>maxLen</code> (fully extended).
+      </li>
+      <li><strong>Number of Springs:</strong> 
+        The total spring force is 
+        <code>SpringForceSingle &times; numSprings</code>.
+      </li>
+      <li><strong>Handle Force:</strong> 
+        The net torque (<code>doorTorque - springTorque</code>) 
+        is divided by the door radius at the handle, 
+        <code>handleFrac &times; L</code>.
+      </li>
+    </ol>
+    <p>
+      Real gas springs can have more complex, non-linear force curves, 
+      friction, or breakaway force. This tool is for approximate sizing & 
+      conceptual understanding.
+    </p>
+  </details>
 </main>
 
 <footer>
   <p>&copy; 2025 - Trap Door Calculator with Auto-Scaling View</p>
 </footer>
 
-<!-- Our chart references remain the same. 
-     We only replace the math logic with Pyodide calls. -->
 <script>
-  // Chart instances
-  let springForceChart = null;
-  let handleForceChart = null;
-
-  /////////////////////////////////////////////////////////////////////
-  // 1) Pyodide Initialization
-  /////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////
+  // 1) Load Pyodide & calc.py
+  ///////////////////////////////////////////////////////////////////////////
 
   let pyodide; // we'll store the Pyodide instance here
 
   async function initPyodideAndPython() {
     // 1. Load Pyodide
     pyodide = await loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/",
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.3/full/"
     });
     console.log("Pyodide loaded!");
 
-    // 2. Fetch calc.py and run it in Pyodide
+    // 2. Fetch calc.py and run it in Pyodide.
+    //    Make sure calc.py is in the same folder as this index.html.
     const resp = await fetch("calc.py");
     const calcSource = await resp.text();
-    await pyodide.runPythonAsync(calcSource);
+    await pyodide.runPythonAsync(calcSource); 
     console.log("calc.py loaded into Pyodide!");
   }
 
-  /////////////////////////////////////////////////////////////////////
-  // 2) Canvas Drawing (same as before)
-  /////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////
+  // 2) Canvas Drawing (unchanged from your original code)
+  ///////////////////////////////////////////////////////////////////////////
 
   function drawArrow(ctx, x1, y1, x2, y2, arrowSize=8) {
     ctx.beginPath();
@@ -282,13 +271,8 @@
     ctx.fill();
   }
 
-  // boundingBoxForAngle, combinedBoundingBox, drawDoorState, drawDiagram
-  // are unchanged—only do geometry + drawing. 
-  function boundingBoxForAngle(
-    lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY, handleFrac
-  ) {
+  function boundingBoxForAngle(lengthDoor, thetaDeg, doorMountFrac, cabMountX, cabMountY, handleFrac) {
     const thetaRad = thetaDeg*Math.PI/180;
-    // hinge at (0,0)
     const doorEndX = lengthDoor*Math.cos(thetaRad);
     const doorEndY = lengthDoor*Math.sin(thetaRad);
     const doorMountX = doorMountFrac*lengthDoor*Math.cos(thetaRad);
@@ -314,9 +298,7 @@
     return {minX, maxX, minY, maxY};
   }
 
-  function combinedBoundingBox(
-    lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
-  ) {
+  function combinedBoundingBox(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac) {
     const bbDown = boundingBoxForAngle(lengthDoor, 0, doorMountFrac, cabMountX, cabMountY, handleFrac);
     const bbUp   = boundingBoxForAngle(lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac);
 
@@ -337,24 +319,19 @@
     ctx.globalAlpha = alpha;
 
     const thetaRad = angleDeg*Math.PI/180;
-    // hinge
     const hinge = {x:0, y:0};
-    // door end
     const doorEnd = {
       x: lengthDoor*Math.cos(thetaRad),
       y: lengthDoor*Math.sin(thetaRad)
     };
-    // door mount
     const doorMount = {
       x: doorMountFrac*lengthDoor*Math.cos(thetaRad),
       y: doorMountFrac*lengthDoor*Math.sin(thetaRad)
     };
-    // handle
     const handlePt = {
       x: handleFrac*lengthDoor*Math.cos(thetaRad),
       y: handleFrac*lengthDoor*Math.sin(thetaRad)
     };
-    // cabinet
     const cab = {x: cabMountX, y: cabMountY};
 
     function tx(p){
@@ -370,23 +347,23 @@
     const handleC  = tx(handlePt);
 
     // door line
-    ctx.strokeStyle=colorDoor;
-    ctx.lineWidth=4;
+    ctx.strokeStyle = colorDoor;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(hingeC.x, hingeC.y);
     ctx.lineTo(doorEndC.x, doorEndC.y);
     ctx.stroke();
 
     // spring line
-    ctx.strokeStyle=colorSpring;
-    ctx.lineWidth=2;
+    ctx.strokeStyle = colorSpring;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(doorMountC.x, doorMountC.y);
     ctx.lineTo(cabC.x, cabC.y);
     ctx.stroke();
 
     // door mount
-    ctx.fillStyle=colorSpring;
+    ctx.fillStyle = colorSpring;
     ctx.beginPath();
     ctx.arc(doorMountC.x, doorMountC.y, 4, 0, 2*Math.PI);
     ctx.fill();
@@ -397,7 +374,7 @@
     ctx.fill();
 
     // handle
-    ctx.fillStyle=colorHandle;
+    ctx.fillStyle = colorHandle;
     ctx.beginPath();
     ctx.arc(handleC.x, handleC.y, 5, 0, 2*Math.PI);
     ctx.fill();
@@ -409,7 +386,6 @@
     lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
   ) {
     ctx.clearRect(0,0,w,h);
-
     const {minX, maxX, minY, maxY} = combinedBoundingBox(
       lengthDoor, openAngle, doorMountFrac, cabMountX, cabMountY, handleFrac
     );
@@ -432,9 +408,9 @@
     const offsetY = canvasCenterY + bbCenterY*scale;
 
     // Gravity arrow
-    ctx.strokeStyle="#444";
-    ctx.fillStyle="#444";
-    ctx.lineWidth=2;
+    ctx.strokeStyle = "#444";
+    ctx.fillStyle = "#444";
+    ctx.lineWidth = 2;
     drawArrow(ctx, 50, 20, 50, 60, 8);
     ctx.font="14px Arial";
     ctx.fillText("Gravity", 55, 60);
@@ -467,9 +443,12 @@
     ctx.restore();
   }
 
-  /////////////////////////////////////////////////////////////////////
-  // 3) Chart Updating
-  /////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////
+  // 3) Charts
+  ///////////////////////////////////////////////////////////////////////////
+
+  let springForceChart = null;
+  let handleForceChart = null;
 
   function updateCharts(springData, handleData, angles) {
     const ctx1 = document.getElementById("springForceChart").getContext("2d");
@@ -513,9 +492,9 @@
     });
   }
 
-  /////////////////////////////////////////////////////////////////////
-  // 4) Main compute function (now calls Python)
-  /////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////
+  // 4) Main compute function (calls Python)
+  ///////////////////////////////////////////////////////////////////////////
 
   async function computeEverything() {
     const massDoor   = parseFloat(document.getElementById("massDoor").value);
@@ -529,8 +508,7 @@
     const springVariation = parseFloat(document.getElementById("springVariation").value);
     const handleFrac = parseFloat(document.getElementById("handleFrac").value);
 
-    // We'll pass these to the Python function trapdoor_calculate(...) 
-    // and get back a result dict. 
+    // Pass these to Python
     pyodide.globals.set("mass_door", massDoor);
     pyodide.globals.set("length_door", lengthDoor);
     pyodide.globals.set("open_angle", openAngle);
@@ -542,11 +520,9 @@
     pyodide.globals.set("spring_variation", springVariation);
     pyodide.globals.set("handle_frac", handleFrac);
 
-    // Call the Python function trapdoor_calculate(...) 
-    // We'll store it in a JS variable 'pyResult'
+    // Call the Python function trapdoor_calculate() that we defined in calc.py
     const pyResult = pyodide.runPython(`
 import json
-
 res = trapdoor_calculate(
     mass_door,
     length_door,
@@ -559,11 +535,8 @@ res = trapdoor_calculate(
     spring_variation,
     handle_frac
 )
-# Convert the Python dict to JSON string for easy passing to JS
 json.dumps(res)
 `);
-
-    // Now parse the JSON to a JS object
     const resultObj = JSON.parse(pyResult);
 
     // Extract data for UI
@@ -597,12 +570,15 @@ json.dumps(res)
     );
   }
 
-  // On page load, initialize Pyodide, then do an initial compute
+  ///////////////////////////////////////////////////////////////////////////
+  // 5) On Page Load
+  ///////////////////////////////////////////////////////////////////////////
   window.addEventListener("DOMContentLoaded", async () => {
+    // 1. Initialize Pyodide
     await initPyodideAndPython();
-    // Hook up button
+    // 2. Hook the compute button
     document.getElementById("computeBtn").addEventListener("click", computeEverything);
-    // Compute initial state
+    // 3. Do an initial compute so the page is populated
     await computeEverything();
   });
 </script>
